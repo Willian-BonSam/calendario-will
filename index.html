@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Calendário 2026</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
   :root{
     --red:#E63946;
@@ -13,6 +15,9 @@
     --ink:#1B1B1F;
     --line:#E6E6EA;
     --wash:#F7F8FA;
+    --col-trabalho:#1D3557;
+    --col-pessoal:#E63946;
+    --col-marco:#2a9d5c;
   }
   *{box-sizing:border-box;}
   body{
@@ -161,6 +166,8 @@
     align-items:baseline;
     justify-content:space-between;
     padding:20px 24px 10px;
+    position:relative;
+    z-index:2;
   }
   .month-head h2{
     margin:0;
@@ -168,7 +175,46 @@
     font-weight:800;
     color:var(--blue);
   }
+  .month-head .head-right{display:flex;align-items:center;gap:10px;}
   .month-head .count{font-size:12px;color:#999;font-weight:600;}
+  .img-btn{
+    width:26px;height:26px;
+    border-radius:50%;
+    border:1px solid var(--line);
+    background:#fff;
+    display:flex;align-items:center;justify-content:center;
+    cursor:pointer;
+    font-size:12px;
+    color:#888;
+    flex-shrink:0;
+  }
+  .img-btn:hover{border-color:var(--blue-soft);color:var(--blue-soft);}
+  .month-block{position:relative;}
+  .month-block.has-bg .month-head h2,
+  .month-block.has-bg .month-head .count{
+    color:#fff;
+    text-shadow:0 1px 4px rgba(0,0,0,.5);
+  }
+  .month-block.has-bg .month-head{
+    background-size:cover;
+    background-position:center;
+    border-radius:16px 16px 0 0;
+  }
+  .month-block.has-bg .month-head::before{
+    content:"";
+    position:absolute;inset:0;
+    background:linear-gradient(180deg, rgba(0,0,0,.35), rgba(0,0,0,.08));
+    border-radius:16px 16px 0 0;
+    z-index:-1;
+  }
+  .month-block.has-bg .img-btn{background:rgba(255,255,255,.85);}
+  .month-block.selecting{outline:2px dashed var(--blue-soft);}
+  .month-block .select-check{
+    display:none;
+    position:absolute;top:14px;left:14px;z-index:5;
+    width:22px;height:22px;
+  }
+  .month-block.select-mode .select-check{display:block;}
   .weekdays{
     display:grid;
     grid-template-columns:repeat(7,1fr);
@@ -213,9 +259,9 @@
     overflow:hidden;
     text-overflow:ellipsis;
   }
-  .day .ev.tipo-trabalho{background:var(--blue);}
-  .day .ev.tipo-pessoal{background:var(--red);}
-  .day .ev.tipo-marco{background:#2a9d5c;}
+  .day .ev.tipo-trabalho{background:var(--col-trabalho);}
+  .day .ev.tipo-pessoal{background:var(--col-pessoal);}
+  .day .ev.tipo-marco{background:var(--col-marco);}
   .day .ev + .ev{margin-top:2px;}
   .day .more{font-size:9px;color:#999;margin-top:2px;}
 
@@ -264,6 +310,32 @@
     color:#aaa;
   }
 
+  /* ===== SECONDARY MODALS ===== */
+  .modal h4{margin:18px 0 8px;font-size:13px;color:var(--blue);}
+  .month-check-grid{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:8px;
+    margin-top:8px;
+  }
+  .month-check{
+    display:flex;align-items:center;gap:6px;
+    border:1px solid var(--line);
+    border-radius:8px;
+    padding:8px 8px;
+    font-size:12.5px;
+    cursor:pointer;
+    background:var(--wash);
+  }
+  .month-check input{margin:0;}
+  .color-row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;}
+  .color-row .label{font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px;}
+  .color-row .label .dot{width:10px;height:10px;border-radius:50%;display:inline-block;}
+  .color-row input[type=color]{width:44px;height:32px;border:1px solid var(--line);border-radius:6px;padding:2px;background:#fff;cursor:pointer;}
+  .file-hidden{display:none;}
+  .hint{font-size:11.5px;color:#999;margin-top:6px;line-height:1.4;}
+  .export-progress{font-size:12.5px;color:var(--blue-soft);margin-top:10px;display:none;}
+
   @media(max-width:640px){
     header{padding:40px 18px 30px;}
     .toolbar,.month-nav,main{padding-left:16px;padding-right:16px;}
@@ -296,11 +368,15 @@
   </div>
   <div class="spacer"></div>
   <div class="legend">
-    <span><span class="dot" style="background:var(--blue)"></span>Trabalho</span>
-    <span><span class="dot" style="background:var(--red)"></span>Pessoal</span>
-    <span><span class="dot" style="background:#2a9d5c"></span>Marco</span>
+    <span><span class="dot" style="background:var(--col-trabalho)"></span>Trabalho</span>
+    <span><span class="dot" style="background:var(--col-pessoal)"></span>Pessoal</span>
+    <span><span class="dot" style="background:var(--col-marco)"></span>Marco</span>
   </div>
   <button class="btn-primary" id="exportBtn">Exportar dados</button>
+  <button class="btn-ghost" id="importBtn">Importar dados</button>
+  <input type="file" id="importFile" class="file-hidden" accept=".csv">
+  <button class="btn-ghost" id="imageExportBtn">Imagem / PDF</button>
+  <button class="btn-ghost" id="settingsBtn">Personalizar</button>
 </div>
 
 <div class="month-nav" id="monthNav"></div>
@@ -333,6 +409,54 @@
     </div>
   </div>
 </div>
+
+<div class="overlay" id="overlayExport">
+  <div class="modal">
+    <h3>Exportar imagem / PDF</h3>
+    <p class="date-label">Escolha um ou mais meses de <span id="exportYearLabel">2026</span></p>
+    <div class="month-check-grid" id="monthCheckGrid"></div>
+    <p class="hint">A imagem/PDF é gerada a partir do que está na tela, incluindo as cores e imagens de fundo personalizadas.</p>
+    <p class="export-progress" id="exportProgress">Gerando arquivo, aguarde...</p>
+    <div class="modal-actions">
+      <button class="close-btn" id="closeExportModal">Fechar</button>
+      <button class="save-btn" id="genImage">Baixar imagem (PNG)</button>
+    </div>
+    <div class="modal-actions">
+      <button class="save-btn" id="genPdf" style="flex:1;background:var(--blue-soft);">Baixar PDF</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="overlaySettings">
+  <div class="modal">
+    <h3>Personalizar calendário</h3>
+    <p class="date-label">Cores e imagens ficam salvas neste navegador</p>
+
+    <h4>Cores dos eventos</h4>
+    <div class="color-row">
+      <span class="label"><span class="dot" style="background:var(--col-trabalho)"></span>Trabalho</span>
+      <input type="color" id="colorTrabalho" value="#1D3557">
+    </div>
+    <div class="color-row">
+      <span class="label"><span class="dot" style="background:var(--col-pessoal)"></span>Pessoal</span>
+      <input type="color" id="colorPessoal" value="#E63946">
+    </div>
+    <div class="color-row">
+      <span class="label"><span class="dot" style="background:var(--col-marco)"></span>Marco / prazo</span>
+      <input type="color" id="colorMarco" value="#2a9d5c">
+    </div>
+
+    <h4>Imagem de fundo por mês</h4>
+    <p class="hint">Clique no ícone de câmera no topo de cada mês, no calendário, para adicionar ou trocar a imagem daquele mês especificamente.</p>
+
+    <div class="modal-actions">
+      <button class="close-btn" id="resetColors">Restaurar cores padrão</button>
+      <button class="save-btn" id="closeSettingsModal">Concluído</button>
+    </div>
+  </div>
+</div>
+
+<input type="file" id="monthImageFile" class="file-hidden" accept="image/*">
 
 <script>
 const MESES = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
@@ -449,8 +573,22 @@ function renderCalendar(filterText='', filterTipo=''){
 
     const head = document.createElement('div');
     head.className = 'month-head';
-    head.innerHTML = `<h2>${MESES[m]}</h2><span class="count">${eventCount ? eventCount+' evento(s)' : ''}</span>`;
+    head.innerHTML = `<h2>${MESES[m]}</h2>
+      <div class="head-right">
+        <span class="count">${eventCount ? eventCount+' evento(s)' : ''}</span>
+        <span class="img-btn" title="Imagem de fundo do mês" data-month="${m}">📷</span>
+      </div>`;
     block.appendChild(head);
+
+    const bgImg = getMonthImage(YEAR, m);
+    if(bgImg){
+      block.classList.add('has-bg');
+      head.style.backgroundImage = `url(${bgImg})`;
+    }
+    head.querySelector('.img-btn').onclick = (e)=>{
+      e.stopPropagation();
+      openMonthImagePicker(m);
+    };
 
     const wd = document.createElement('div');
     wd.className = 'weekdays';
@@ -536,7 +674,7 @@ function renderEventList(){
   list.forEach((ev, idx)=>{
     const row = document.createElement('div');
     row.className = 'event-row';
-    const color = ev.tipo==='trabalho' ? 'var(--blue)' : ev.tipo==='pessoal' ? 'var(--red)' : '#2a9d5c';
+    const color = ev.tipo==='trabalho' ? 'var(--col-trabalho)' : ev.tipo==='pessoal' ? 'var(--col-pessoal)' : 'var(--col-marco)';
     row.innerHTML = `<span class="tag" style="background:${color}"></span>
       <span class="txt"><strong>${escapeHtml(ev.texto)}</strong>${ev.obs? ' — '+escapeHtml(ev.obs):''}</span>
       <span class="del" data-idx="${idx}">✕</span>`;
@@ -619,6 +757,240 @@ document.getElementById('exportBtn').onclick = ()=>{
   URL.revokeObjectURL(url);
 };
 
+/* ===== CORES PERSONALIZADAS ===== */
+const COLORS_KEY = "calendario_cores";
+const DEFAULT_COLORS = { trabalho:'#1D3557', pessoal:'#E63946', marco:'#2a9d5c' };
+
+function loadColors(){
+  let cores = {...DEFAULT_COLORS};
+  try{
+    const raw = localStorage.getItem(COLORS_KEY);
+    if(raw) cores = {...cores, ...JSON.parse(raw)};
+  }catch(e){}
+  applyColors(cores);
+  document.getElementById('colorTrabalho').value = cores.trabalho;
+  document.getElementById('colorPessoal').value = cores.pessoal;
+  document.getElementById('colorMarco').value = cores.marco;
+}
+function applyColors(cores){
+  document.documentElement.style.setProperty('--col-trabalho', cores.trabalho);
+  document.documentElement.style.setProperty('--col-pessoal', cores.pessoal);
+  document.documentElement.style.setProperty('--col-marco', cores.marco);
+}
+function saveColors(){
+  const cores = {
+    trabalho: document.getElementById('colorTrabalho').value,
+    pessoal: document.getElementById('colorPessoal').value,
+    marco: document.getElementById('colorMarco').value
+  };
+  try{ localStorage.setItem(COLORS_KEY, JSON.stringify(cores)); }catch(e){}
+  applyColors(cores);
+  renderEventList();
+}
+
+/* ===== IMAGENS POR MÊS (por ano) ===== */
+const IMAGES_PREFIX = "calendario_imagens_"; // + ano
+let currentImageMonth = null;
+
+function loadMonthImages(){
+  try{
+    const raw = localStorage.getItem(IMAGES_PREFIX + YEAR);
+    return raw ? JSON.parse(raw) : {};
+  }catch(e){ return {}; }
+}
+function getMonthImage(year, m){
+  const imgs = loadMonthImages();
+  return imgs[m] || null;
+}
+function saveMonthImage(m, dataUrl){
+  const imgs = loadMonthImages();
+  if(dataUrl) imgs[m] = dataUrl; else delete imgs[m];
+  try{ localStorage.setItem(IMAGES_PREFIX + YEAR, JSON.stringify(imgs)); }
+  catch(e){ alert("A imagem é muito grande para ser salva. Tente uma imagem menor."); }
+}
+function openMonthImagePicker(m){
+  currentImageMonth = m;
+  document.getElementById('monthImageFile').click();
+}
+document.getElementById('monthImageFile').addEventListener('change', (e)=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  const img = new Image();
+  const reader = new FileReader();
+  reader.onload = (ev)=>{
+    img.onload = ()=>{
+      // redimensiona para no máximo 800px de largura, para não estourar o localStorage
+      const maxW = 800;
+      const scale = Math.min(1, maxW / img.width);
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width * scale;
+      canvas.height = img.height * scale;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.78);
+      saveMonthImage(currentImageMonth, dataUrl);
+      applyFilters();
+    };
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+  e.target.value = '';
+});
+
+/* ===== IMPORTAR CSV ===== */
+document.getElementById('importBtn').onclick = ()=> document.getElementById('importFile').click();
+document.getElementById('importFile').addEventListener('change', (e)=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev)=> importCSV(ev.target.result);
+  reader.readAsText(file, 'utf-8');
+  e.target.value = '';
+});
+
+function parseCsvLine(line){
+  const out = [];
+  let cur = '', inQuotes = false;
+  for(let i=0;i<line.length;i++){
+    const c = line[i];
+    if(inQuotes){
+      if(c === '"'){
+        if(line[i+1] === '"'){ cur += '"'; i++; }
+        else inQuotes = false;
+      } else cur += c;
+    } else {
+      if(c === '"') inQuotes = true;
+      else if(c === ','){ out.push(cur); cur=''; }
+      else cur += c;
+    }
+  }
+  out.push(cur);
+  return out;
+}
+
+function importCSV(text){
+  const lines = text.split(/\r?\n/).filter(l=>l.trim().length>0);
+  if(lines.length < 2){ alert('Arquivo CSV vazio ou inválido.'); return; }
+
+  const dataPorAno = {}; // { 2026: { key: [ev,...] } }
+  let importados = 0, ignorados = 0;
+
+  for(let i=1; i<lines.length; i++){
+    const cols = parseCsvLine(lines[i]);
+    if(cols.length < 3) { ignorados++; continue; }
+    const [data, tipoRaw, texto, obs] = cols;
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec((data||'').trim());
+    if(!m || !texto){ ignorados++; continue; }
+    const ano = m[1];
+    const tipo = ['trabalho','pessoal','marco'].includes((tipoRaw||'').trim()) ? tipoRaw.trim() : 'trabalho';
+    if(!dataPorAno[ano]) dataPorAno[ano] = {};
+    if(!dataPorAno[ano][data]) dataPorAno[ano][data] = [];
+    dataPorAno[ano][data].push({texto: texto.trim(), tipo, obs: (obs||'').trim()});
+    importados++;
+  }
+
+  Object.keys(dataPorAno).forEach(ano=>{
+    let existentes = {};
+    try{
+      const raw = localStorage.getItem(STORAGE_PREFIX + ano);
+      existentes = raw ? JSON.parse(raw) : {};
+    }catch(e){}
+    Object.keys(dataPorAno[ano]).forEach(key=>{
+      if(!existentes[key]) existentes[key] = [];
+      existentes[key] = existentes[key].concat(dataPorAno[ano][key]);
+    });
+    try{ localStorage.setItem(STORAGE_PREFIX + ano, JSON.stringify(existentes)); }catch(e){}
+  });
+
+  loadEvents();
+  applyFilters();
+  alert(`Importação concluída: ${importados} evento(s) importado(s)${ignorados? ', '+ignorados+' linha(s) ignorada(s)':''}.`);
+}
+
+/* ===== EXPORTAR IMAGEM / PDF ===== */
+document.getElementById('imageExportBtn').onclick = ()=>{
+  document.getElementById('exportYearLabel').textContent = YEAR;
+  const grid = document.getElementById('monthCheckGrid');
+  grid.innerHTML = '';
+  const t = new Date();
+  MESES.forEach((nome,i)=>{
+    const label = document.createElement('label');
+    label.className = 'month-check';
+    const checked = (YEAR===t.getFullYear() && i===t.getMonth()) ? 'checked' : '';
+    label.innerHTML = `<input type="checkbox" value="${i}" ${checked}> ${nome}`;
+    grid.appendChild(label);
+  });
+  document.getElementById('overlayExport').classList.add('show');
+};
+document.getElementById('closeExportModal').onclick = ()=> document.getElementById('overlayExport').classList.remove('show');
+
+function getSelectedMonths(){
+  return Array.from(document.querySelectorAll('#monthCheckGrid input:checked')).map(el=>parseInt(el.value));
+}
+
+async function buildExportCanvas(monthIndexes){
+  const container = document.createElement('div');
+  container.style.position = 'fixed';
+  container.style.left = '-9999px';
+  container.style.top = '0';
+  container.style.background = '#ffffff';
+  container.style.padding = '24px';
+  container.style.width = '820px';
+  monthIndexes.sort((a,b)=>a-b).forEach(m=>{
+    const original = document.getElementById('month-'+m);
+    if(original) container.appendChild(original.cloneNode(true));
+  });
+  document.body.appendChild(container);
+  const canvas = await html2canvas(container, {scale:2, backgroundColor:'#ffffff', useCORS:true});
+  document.body.removeChild(container);
+  return canvas;
+}
+
+document.getElementById('genImage').onclick = async ()=>{
+  const months = getSelectedMonths();
+  if(months.length===0){ alert('Selecione pelo menos um mês.'); return; }
+  document.getElementById('exportProgress').style.display = 'block';
+  const canvas = await buildExportCanvas(months);
+  document.getElementById('exportProgress').style.display = 'none';
+  canvas.toBlob(blob=>{
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `calendario_${YEAR}_${months.map(m=>m+1).join('-')}.png`;
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+};
+
+document.getElementById('genPdf').onclick = async ()=>{
+  const months = getSelectedMonths();
+  if(months.length===0){ alert('Selecione pelo menos um mês.'); return; }
+  document.getElementById('exportProgress').style.display = 'block';
+  const canvas = await buildExportCanvas(months);
+  document.getElementById('exportProgress').style.display = 'none';
+  const { jsPDF } = window.jspdf;
+  const pdf = new jsPDF({orientation:'p', unit:'pt', format:'a4'});
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  const imgData = canvas.toDataURL('image/png');
+  const imgProps = pdf.getImageProperties(imgData);
+  const imgHeight = (imgProps.height * pageWidth) / imgProps.width;
+  pdf.addImage(imgData, 'PNG', 0, 0, pageWidth, imgHeight);
+  pdf.save(`calendario_${YEAR}_${months.map(m=>m+1).join('-')}.pdf`);
+};
+
+/* ===== PERSONALIZAR (modal de configurações) ===== */
+document.getElementById('settingsBtn').onclick = ()=> document.getElementById('overlaySettings').classList.add('show');
+document.getElementById('closeSettingsModal').onclick = ()=> document.getElementById('overlaySettings').classList.remove('show');
+document.getElementById('colorTrabalho').addEventListener('input', saveColors);
+document.getElementById('colorPessoal').addEventListener('input', saveColors);
+document.getElementById('colorMarco').addEventListener('input', saveColors);
+document.getElementById('resetColors').onclick = ()=>{
+  try{ localStorage.removeItem(COLORS_KEY); }catch(e){}
+  loadColors();
+  renderEventList();
+  applyFilters();
+};
+
 document.getElementById('yearSelect').onchange = (e)=> switchYear(parseInt(e.target.value));
 document.getElementById('prevYear').onclick = ()=> switchYear(YEAR-1);
 document.getElementById('nextYear').onclick = ()=> switchYear(YEAR+1);
@@ -628,6 +1000,7 @@ window.addEventListener('scroll', highlightActivePill);
 loadLastSelectedYear();
 document.getElementById('yearDisplay').textContent = YEAR;
 buildYearSelect();
+loadColors();
 loadEvents();
 renderCalendar();
 </script>
